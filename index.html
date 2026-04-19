@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blacklist Manager</title>
+<style>
+:root {
+  --bg:#080b10; --s1:#0d1117; --s2:#161b22; --s3:#1c2430;
+  --border:#21262d; --border2:#30363d;
+  --red:#f85149; --red-dim:rgba(248,81,73,.12);
+  --blue:#58a6ff; --blue-dim:rgba(88,166,255,.12);
+  --green:#3fb950; --green-dim:rgba(63,185,80,.12);
+  --amber:#d29922; --amber-dim:rgba(210,153,34,.12);
+  --purple:#bc8cff; --purple-dim:rgba(188,140,255,.12);
+  --text:#e6edf3; --muted:#7d8590; --muted2:#484f58;
+  --radius:8px; --radius-lg:12px;
+  --font-mono: 'Courier New', Consolas, monospace;
+  --font: 'Segoe UI', Tahoma, sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;line-height:1.5}
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--s1)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ─── LOGIN ─── */
+#login-overlay{
+  position:fixed;inset:0;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;z-index:9999;
+  transition:opacity .3s;
+}
+#login-overlay.hide{opacity:0;pointer-events:none}
+.login-card{
+  background:var(--s1);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:40px 36px;width:380px;
+  box-shadow:0 0 0 1px rgba(255,255,255,.04), 0 24px 48px rgba(0,0,0,.6);
+  animation:slideUp .4s ease;
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.login-icon{font-size:32px;margin-bottom:16px}
+.login-title{font-size:20px;font-weight:700;margin-bottom:4px;letter-spacing:-.3px}
+.login-sub{color:var(--muted);font-size:12px;margin-bottom:28px;font-family:var(--font-mono)}
+.field-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+.field{margin-bottom:14px}
+.login-err{
+  background:var(--red-dim);border:1px solid rgba(248,81,73,.3);
+  color:var(--red);font-size:12px;padding:8px 12px;border-radius:var(--radius);
+  margin-bottom:12px;display:none;
+}
+
+/* ─── TOPBAR ─── */
+.topbar{
+  background:var(--s1);border-bottom:1px solid var(--border);
+  padding:0 20px;height:52px;display:flex;align-items:center;
+  justify-content:space-between;position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(8px);
+}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;letter-spacing:-.2px}
+.logo-badge{
+  width:30px;height:30px;background:var(--red);border-radius:7px;
+  display:grid;place-items:center;font-size:15px;
+  box-shadow:0 0 12px rgba(248,81,73,.4);
+}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.user-chip{
+  font-size:11px;color:var(--muted);font-family:var(--font-mono);
+  background:var(--s2);border:1px solid var(--border);padding:4px 10px;border-radius:99px;
+}
+.super-chip{color:var(--amber);background:var(--amber-dim);border-color:rgba(210,153,34,.3)}
+
+/* ─── LAYOUT ─── */
+.layout{display:grid;grid-template-columns:200px 1fr;min-height:calc(100vh - 52px)}
+.sidebar{background:var(--s1);border-right:1px solid var(--border);padding:8px 0;overflow-y:auto}
+.nav-group{padding:14px 12px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2)}
+.nav{
+  display:flex;align-items:center;gap:8px;padding:7px 14px;cursor:pointer;
+  color:var(--muted);font-size:13px;border-left:2px solid transparent;
+  transition:all .12s;border-radius:0 var(--radius) var(--radius) 0;margin:1px 6px 1px 0;
+}
+.nav:hover{color:var(--text);background:var(--s2)}
+.nav.on{color:var(--blue);border-left-color:var(--blue);background:var(--blue-dim);font-weight:600}
+.nav-icon{width:16px;text-align:center;font-size:14px}
+.main{padding:24px;overflow-y:auto;max-height:calc(100vh - 52px)}
+.page{display:none}.page.on{display:block}
+.pg-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px}
+.pg-title{font-size:19px;font-weight:700;letter-spacing:-.3px}
+
+/* ─── STATS ─── */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}
+.stat{
+  background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px 16px;cursor:default;transition:border-color .15s;
+}
+.stat:hover{border-color:var(--border2)}
+.stat-n{font-size:26px;font-weight:700;font-family:var(--font-mono);margin-bottom:2px}
+.stat-l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.stat.r .stat-n{color:var(--red)} .stat.b .stat-n{color:var(--blue)}
+.stat.g .stat-n{color:var(--green)} .stat.p .stat-n{color:var(--purple)}
+
+/* ─── CARD ─── */
+.card{background:var(--s1);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.card-head{
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px;
+}
+.card-head::before{content:'';display:inline-block;width:3px;height:12px;background:currentColor;border-radius:2px}
+
+/* ─── FORM ─── */
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+input,select{
+  background:var(--s2);border:1px solid var(--border2);color:var(--text);
+  padding:7px 11px;border-radius:var(--radius);font-size:13px;
+  font-family:var(--font);outline:none;transition:border-color .15s,box-shadow .15s;
+  flex:1;min-width:100px;
+}
+input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(88,166,255,.15)}
+input::placeholder{color:var(--muted2)}
+select option{background:var(--s2)}
+
+/* ─── BUTTONS ─── */
+button{
+  padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border2);
+  cursor:pointer;font-size:12px;font-family:var(--font);font-weight:600;
+  transition:all .12s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;
+}
+.btn-red{background:var(--red);color:#fff;border-color:#b02030}
+.btn-red:hover{background:#da3b35;box-shadow:0 0 12px rgba(248,81,73,.35)}
+.btn-blue{background:var(--blue);color:#fff;border-color:#2060c0}
+.btn-blue:hover{background:#4090e8;box-shadow:0 0 12px rgba(88,166,255,.35)}
+.btn-green{background:var(--green);color:#fff;border-color:#2a8a38}
+.btn-green:hover{background:#35a844}
+.btn-ghost{background:var(--s2);color:var(--text);border-color:var(--border2)}
+.btn-ghost:hover{background:var(--s3)}
+.btn-amber{background:var(--amber-dim);color:var(--amber);border-color:rgba(210,153,34,.4)}
+.btn-amber:hover{background:rgba(210,153,34,.2)}
+.btn-sm{padding:4px 9px;font-size:11px}
+.btn-danger{background:var(--red-dim);color:var(--red);border-color:rgba(248,81,73,.3)}
+.btn-danger:hover{background:rgba(248,81,73,.2)}
+.btn-unban{background:var(--green-dim);color:var(--green);border-color:rgba(63,185,80,.3)}
+.btn-unban:hover{background:rgba(63,185,80,.2)}
+
+/* ─── TABLE ─── */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{
+  font-size:10px;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--muted);padding:7px 10px;border-bottom:1px solid var(--border);
+  text-align:left;font-weight:700;white-space:nowrap;
+}
+td{padding:9px 10px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+tr:last-child td{border:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+.empty{text-align:center;color:var(--muted);padding:36px;font-size:13px}
+
+/* ─── BADGE ─── */
+.badge{font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;display:inline-block;letter-spacing:.04em}
+.bd-user  {background:var(--red-dim)  ;color:var(--red)   ;border:1px solid rgba(248,81,73,.25)}
+.bd-group {background:var(--blue-dim) ;color:var(--blue)  ;border:1px solid rgba(88,166,255,.25)}
+.bd-super {background:var(--amber-dim);color:var(--amber) ;border:1px solid rgba(210,153,34,.3)}
+.bd-admin {background:var(--purple-dim);color:var(--purple);border:1px solid rgba(188,140,255,.3)}
+.bd-ban   {background:var(--red-dim)  ;color:var(--red)}
+.bd-unban {background:var(--green-dim);color:var(--green)}
+
+/* ─── MONO TEXT ─── */
+.mono{font-family:var(--font-mono);font-size:12px}
+.uid-link{color:var(--blue);font-family:var(--font-mono);font-size:11px;text-decoration:none}
+.uid-link:hover{text-decoration:underline}
+.muted{color:var(--muted)}
+
+/* ─── CODE ─── */
+.code-block{
+  background:#010409;border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px;font-family:var(--font-mono);font-size:11.5px;line-height:1.7;
+  color:#e6edf3;white-space:pre;overflow:auto;max-height:400px;
+}
+
+/* ─── MODAL ─── */
+.modal-bg{
+  position:fixed;inset:0;background:rgba(0,0,0,.7);
+  display:flex;align-items:center;justify-content:center;z-index:8000;
+  opacity:0;pointer-events:none;transition:opacity .2s;backdrop-filter:blur(4px);
+}
+.modal-bg.show{opacity:1;pointer-events:all}
+.modal{
+  background:var(--s1);border:1px solid var(--border2);border-radius:var(--radius-lg);
+  padding:28px;width:420px;max-width:92vw;
+  box-shadow:0 24px 64px rgba(0,0,0,.8);
+  transform:scale(.96);transition:transform .2s;
+}
+.modal-bg.show .modal{transform:scale(1)}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+/* ─── TOAST ─── */
+.toast{
+  position:fixed;bottom:20px;right:20px;
+  padding:10px 16px;border-radius:var(--radius);font-size:12px;font-weight:600;
+  opacity:0;transform:translateY(6px);transition:all .2s;pointer-events:none;z-index:9999;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:280px;
+}
+.toast.show{opacity:1;transform:none}
+.toast.ok{background:var(--green);color:#fff}
+.toast.err{background:var(--red);color:#fff}
+.toast.info{background:var(--blue);color:#fff}
+
+/* ─── DIVIDER ─── */
+.divider{border:none;border-top:1px solid var(--border);margin:12px 0}
+
+/* ─── INFO ROW ─── */
+.info-row{display:flex;gap:8px;font-size:12px;color:var(--muted);margin-top:6px;flex-wrap:wrap;padding:7px 10px;background:var(--s2);border:1px solid var(--border);border-radius:var(--radius);align-items:flex-start;line-height:1.6}
+.info-row b{color:var(--text)}
+
+/* ─── PASS STRENGTH ─── */
+.pass-bar{height:3px;border-radius:2px;background:var(--s3);margin-top:6px;overflow:hidden}
+.pass-fill{height:100%;border-radius:2px;transition:width .3s,background .3s;width:0}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:640px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ─── TOAST ─── -->
+<div class="toast" id="toast"></div>
+
+<!-- ─── LOGIN OVERLAY ─── -->
+<div id="login-overlay">
+  <div class="login-card">
+    <div class="login-icon">🛡️</div>
+    <div class="login-title">Blacklist Manager</div>
+    <div class="login-sub">admin access only</div>
+    <div class="login-err" id="login-err">ชื่อหรือรหัสผ่านไม่ถูกต้อง</div>
+    <div class="field">
+      <div class="field-label">API URL</div>
+      <input type="text" id="l-url" placeholder="https://yoursite.com/blacklist/api.php" value="https://7lntel.wuaze.com/api.php" style="width:100%">
+    </div>
+    <div class="field">
+      <div class="field-label">ชื่อผู้ใช้</div>
+      <input type="text" id="l-user" placeholder="username" style="width:100%" autocomplete="username">
+    </div>
+    <div class="field">
+      <div class="field-label">รหัสผ่าน</div>
+      <input type="password" id="l-pass" placeholder="password" style="width:100%" autocomplete="current-password"
+             onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn-red" style="width:100%;justify-content:center;padding:10px" onclick="doLogin()" id="login-btn">
+      เข้าสู่ระบบ
+    </button>
+  </div>
+</div>
+
+<!-- ─── CHANGE PASSWORD MODAL ─── -->
+<div class="modal-bg" id="modal-pw">
+  <div class="modal">
+    <div class="modal-title">🔑 เปลี่ยนรหัสผ่าน</div>
+    <div class="field"><div class="field-label">รหัสผ่านเดิม</div>
+      <input type="password" id="pw-old" placeholder="รหัสผ่านเดิม" style="width:100%"></div>
+    <div class="field"><div class="field-label">รหัสผ่านใหม่ (12+ ตัว)</div>
+      <input type="password" id="pw-new" placeholder="รหัสผ่านใหม่" style="width:100%" oninput="checkPwStrength(this.value)">
+      <div class="pass-bar"><div class="pass-fill" id="pw-fill"></div></div>
+    </div>
+    <div class="field"><div class="field-label">ยืนยันรหัสผ่านใหม่</div>
+      <input type="password" id="pw-conf" placeholder="ยืนยัน" style="width:100%"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-pw')">ยกเลิก</button>
+      <button class="btn-blue" onclick="changePassword()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ADD ADMIN MODAL ─── -->
+<div class="modal-bg" id="modal-add-admin">
+  <div class="modal">
+    <div class="modal-title">➕ เพิ่มแอดมิน</div>
+    <div class="field"><div class="field-label">ชื่อผู้ใช้</div>
+      <input type="text" id="aa-user" placeholder="username" style="width:100%"></div>
+    <div class="field"><div class="field-label">รหัสผ่าน (12+ ตัว)</div>
+      <input type="password" id="aa-pass" placeholder="password" style="width:100%" oninput="checkPwStrength(this.value,'aa-fill')">
+      <div class="pass-bar"><div class="pass-fill" id="aa-fill"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('modal-add-admin')">ยกเลิก</button>
+      <button class="btn-green" onclick="addAdmin()">เพิ่มแอดมิน</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── APP ─── -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-badge">🚫</div>
+    Blacklist Manager
+  </div>
+  <div class="topbar-right">
+    <span class="user-chip" id="user-chip">—</span>
+    <button class="btn-ghost btn-sm" onclick="openModal('modal-pw')">🔑</button>
+    <button class="btn-ghost btn-sm" onclick="doLogout()">ออก</button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="nav-group">หลัก</div>
+    <div class="nav on" onclick="go('dash',this)"><span class="nav-icon">📊</span> ภาพรวม</div>
+    <div class="nav" onclick="go('users',this)"><span class="nav-icon">👤</span> แบน / ปลดแบน User</div>
+    <div class="nav" onclick="go('groups',this)"><span class="nav-icon">👥</span> แบน / ปลดแบน กลุ่ม</div>
+    <div class="nav-group">ตั้งค่า</div>
+    <div class="nav" id="nav-admins" onclick="go('admins',this)" style="display:none"><span class="nav-icon">🛡️</span> จัดการแอดมิน</div>
+
+    <div class="nav" onclick="go('script',this)"><span class="nav-icon">📜</span> Roblox Script</div>
+    <div class="nav" id="nav-log" onclick="go('log',this)" style="display:none"><span class="nav-icon">📋</span> ประวัติการกระทำ</div>
+  </div>
+
+  <div class="main">
+
+    <!-- ── DASHBOARD ── -->
+    <div class="page on" id="page-dash">
+      <div class="pg-head">
+        <div class="pg-title">ภาพรวม</div>
+        <button class="btn-ghost btn-sm" onclick="loadAll()">🔄 รีเฟรช</button>
+      </div>
+      <div class="stats">
+        <div class="stat r"><div class="stat-n" id="d-u">—</div><div class="stat-l">User ในบัญชีดำ</div></div>
+        <div class="stat b"><div class="stat-n" id="d-g">—</div><div class="stat-l">กลุ่มในบัญชีดำ</div></div>
+      </div>
+      <div class="card">
+        <div class="card-head">รายการล่าสุด (10 รายการ)</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>ชื่อ</th><th>ประเภท</th><th>เหตุผล</th><th>โดย</th><th>วันที่</th></tr></thead>
+            <tbody id="d-recent"><tr><td colspan="6" class="empty">กำลังโหลด…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── USERS ── -->
+    <div class="page" id="page-users">
+      <div class="pg-head">
+        <div class="pg-title">แบน / ปลดแบน User</div>
+      </div>
+      <div class="card">
+        <div class="card-head">เพิ่ม UserId</div>
+        <div class="row" style="align-items:flex-end">
+          <div style="display:flex;flex-direction:column;gap:4px;flex:0 0 170px">
+            <input id="u-id" placeholder="UserId เช่น 7411003978" type="number" oninput="onUserIdInput()" style="width:100%">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;flex:1;position:relative">
+            <input id="u-name" placeholder="ชื่อ (ไม่บังคับ)" style="width:100%">
+            <div id="u-name-status" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--muted);pointer-events:none"></div>
+          </div>
+          <div id="u-avatar-wrap" style="display:none;align-items:center;gap:8px;padding:4px 8px;background:var(--s2);border:1px solid var(--border);border-radius:var(--radius)">
+            <img id="u-avatar-img" src="" style="width:32px;height:32px;border-radius:50%;object-fit:cover">
+            <div>
+              <div id="u-avatar-name" style="font-size:12px;font-weight:700;color:var(--text)"></div>
+              <div style="font-size:10px;color:var(--muted)">ยืนยันแล้ว ✅</div>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <select id="u-reason-preset" style="flex:1" onchange="document.getElementById('u-reason-preset').value && (document.getElementById('u-reason-custom').value='')">
+            <option value="">-- เลือกเหตุผลสำเร็จรูป --</option>
+            <option value="ระบบแบน Global ban">🌐 ระบบแบน Global ban</option>
+            <option value="แบนคนใช้โปรแกรมโกง Ghost-X">🚨 แบนคนใช้โปรแกรมโกง Ghost-X</option>
+            <option value="คนเรื้อน Ghost-X">☣️ คนเรื้อน Ghost-X</option>
+            <option value="ประกาศใบแดง Ghost-X">🔴 ประกาศใบแดง Ghost-X</option>
+            <option value="มีรายชื่อใน 🛑 Blacklist">🛑 มีรายชื่อใน Blacklist</option>
+          </select>
+          <input id="u-reason-custom" placeholder="หรือพิมพ์เหตุผลเอง" style="flex:2" oninput="this.value && (document.getElementById('u-reason-preset').value='')">
+          <button class="btn-red" onclick="addUser()">🚫 แบน</button>
+        </div>
+        <div class="info-row">⚠️ ต้องเลือกเหตุผลอย่างน้อย 1 ช่อง &nbsp;|&nbsp; 💡 หา UserId จาก roblox.com/users/<b style="color:var(--blue)">ID</b>/profile</div>
+      </div>
+      <div class="card">
+        <div class="card-head">รายชื่อทั้งหมด</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <button class="btn-ghost btn-sm" onclick="setUserFilter('active')" id="uf-active">🔴 แบนอยู่</button>
+          <button class="btn-ghost btn-sm" onclick="setUserFilter('unbanned')" id="uf-unbanned">🟢 ปลดแล้ว</button>
+          <button class="btn-ghost btn-sm" onclick="setUserFilter('all')" id="uf-all">ทั้งหมด</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>UserId</th><th>ชื่อ</th><th>เหตุผล</th><th>สถานะ</th><th>โดย</th><th>วันที่</th><th></th></tr></thead>
+            <tbody id="u-table"><tr><td colspan="7" class="empty">กำลังโหลด…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── GROUPS ── -->
+    <div class="page" id="page-groups">
+      <div class="pg-head">
+        <div class="pg-title">แบน / ปลดแบน กลุ่ม</div>
+      </div>
+      <div class="card">
+        <div class="card-head">เพิ่ม GroupId</div>
+        <div class="row">
+          <input id="g-id" placeholder="GroupId เช่น 11223344" type="number" style="flex:0 0 150px">
+          <input id="g-name" placeholder="ชื่อกลุ่ม (ไม่บังคับ)">
+          <input id="g-reason" placeholder="เหตุผล" style="flex:2">
+          <button class="btn-red" onclick="addGroup()">🚫 แบน</button>
+        </div>
+        <div class="info-row">💡 หา GroupId จาก roblox.com/groups/<b style="color:var(--blue)">ID</b></div>
+      </div>
+      <div class="card">
+        <div class="card-head">รายชื่อทั้งหมด</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <button class="btn-ghost btn-sm" onclick="setGroupFilter('active')" id="gf-active">🔴 แบนอยู่</button>
+          <button class="btn-ghost btn-sm" onclick="setGroupFilter('unbanned')" id="gf-unbanned">🟢 ปลดแล้ว</button>
+          <button class="btn-ghost btn-sm" onclick="setGroupFilter('all')" id="gf-all">ทั้งหมด</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>GroupId</th><th>ชื่อกลุ่ม</th><th>เหตุผล</th><th>สถานะ</th><th>โดย</th><th>วันที่</th><th></th></tr></thead>
+            <tbody id="g-table"><tr><td colspan="7" class="empty">กำลังโหลด…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ADMINS (superadmin only) ── -->
+    <div class="page" id="page-admins">
+      <div class="pg-head">
+        <div class="pg-title">🛡️ จัดการแอดมิน</div>
+        <button class="btn-green btn-sm" onclick="openModal('modal-add-admin')">➕ เพิ่มแอดมิน</button>
+      </div>
+      <div class="card">
+        <div class="card-head">รายชื่อแอดมินทั้งหมด</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>ชื่อผู้ใช้</th><th>ระดับ</th><th>สร้างโดย</th><th>วันที่สร้าง</th><th></th></tr></thead>
+            <tbody id="admin-table"><tr><td colspan="6" class="empty">กำลังโหลด…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SCRIPT ── -->
+    <div class="page" id="page-script">
+      <div class="pg-head"><div class="pg-title">📜 Roblox Script</div></div>
+      <div class="card">
+        <div class="card-head">กำหนดค่า</div>
+        <div class="row">
+          <input id="sc-url" placeholder="URL ของ api.php" style="flex:3">
+          <input id="sc-key" placeholder="ROBLOX_KEY (ใน api.php)" style="flex:2">
+          <button class="btn-blue" onclick="genScript()">สร้าง Script</button>
+        </div>
+        <div class="info-row">💡 วางแต่ละ Script ใน ServerScriptService ตามชื่อไฟล์</div>
+      </div>
+      <div class="card">
+        <div class="card-head">📄 KickUsers — วางใน ServerScriptService</div>
+        <div style="display:flex;gap:6px;justify-content:flex-end;margin-bottom:8px">
+          <button class="btn-ghost btn-sm" onclick="copyScript('sc-out-users')">📋 คัดลอก</button>
+        </div>
+        <div class="code-block" id="sc-out-users">-- กด "สร้าง Script" ด้านบนก่อนครับ</div>
+      </div>
+      <div class="card">
+        <div class="card-head">📄 KickGroups — วางใน ServerScriptService</div>
+        <div style="display:flex;gap:6px;justify-content:flex-end;margin-bottom:8px">
+          <button class="btn-ghost btn-sm" onclick="copyScript('sc-out-groups')">📋 คัดลอก</button>
+        </div>
+        <div class="code-block" id="sc-out-groups">-- กด "สร้าง Script" ด้านบนก่อนครับ</div>
+      </div>
+
+      <!-- ── SYNC BAN ── -->
+      <div class="card" style="border-color:rgba(63,185,80,.3)">
+        <div class="card-head" style="color:var(--green)">🔄 Roblox Experience Ban — Sync Blacklist</div>
+        <div class="row">
+          <input id="sc-universe" placeholder="Universe ID (ตัวเลขใน URL ของ experience)" style="flex:2">
+          <input id="sc-opencloud" placeholder="Open Cloud API Key (จาก create.roblox.com/credentials)" style="flex:3">
+          <button class="btn-green" onclick="genSyncScript()">สร้าง Sync Script</button>
+        </div>
+        <div class="info-row" style="background:rgba(63,185,80,.06);border-color:rgba(63,185,80,.2);color:var(--green)">
+          💡 ใช้ <b>Roblox Open Cloud API</b> เพื่อ ban/unban ใน Experience โดยตรง — ผู้เล่นจะไม่สามารถ rejoin ได้แม้ไม่อยู่ใน server
+        </div>
+        <div class="info-row">
+          📌 หา Universe ID: ไปที่ <b>create.roblox.com</b> → เลือก Experience → ดูตัวเลขใน URL ช่อง <b>/experiences/<span style="color:var(--blue)">ID</span>/overview</b>
+        </div>
+        <div class="info-row">
+          🔑 สร้าง API Key: <b>create.roblox.com/credentials</b> → สร้าง API Key → เลือก System: <b>Experience Bans</b> → Operations: <b>Read, Write</b>
+        </div>
+      </div>
+      <div class="card" id="sc-sync-card" style="display:none">
+        <div class="card-head">📄 SyncBan — วางใน ServerScriptService (ทำงานฝั่ง Server เท่านั้น)</div>
+        <div style="display:flex;gap:6px;justify-content:flex-end;margin-bottom:8px">
+          <button class="btn-ghost btn-sm" onclick="copyScript('sc-out-sync')">📋 คัดลอก</button>
+        </div>
+        <div class="code-block" id="sc-out-sync"></div>
+        <div class="info-row" style="margin-top:8px;background:rgba(210,153,34,.08);border-color:rgba(210,153,34,.3);color:var(--amber)">
+          ⚠️ Script นี้รันบน <b>Server Script</b> เท่านั้น — ไม่ต้องวางใน LocalScript<br>
+          ⚠️ Open Cloud API Key <b>ห้ามเปิดเผย</b> — เก็บไว้ใน Script ฝั่ง Server เท่านั้น
+        </div>
+      </div>
+      <div class="card" id="sc-webhook-card" style="display:none">
+        <div class="card-head">📄 SyncBan Webhook — ใช้ใน api.php (ตัวเลือกเพิ่มเติม)</div>
+        <div style="display:flex;gap:6px;justify-content:flex-end;margin-bottom:8px">
+          <button class="btn-ghost btn-sm" onclick="copyScript('sc-out-webhook')">📋 คัดลอก</button>
+        </div>
+        <div class="info-row" style="margin-bottom:8px">
+          📌 เพิ่มโค้ดนี้ใน <b>api.php</b> ในฟังก์ชัน ban/unban เพื่อให้ระบบ sync ไปยัง Roblox อัตโนมัติทุกครั้งที่แบนจากเว็บ
+        </div>
+        <div class="code-block" id="sc-out-webhook"></div>
+      </div>
+    </div>
+
+    <!-- ── LOG (superadmin only) ── -->
+    <div class="page" id="page-log">
+      <div class="pg-head">
+        <div class="pg-title">📋 ประวัติการกระทำ</div>
+        <button class="btn-ghost btn-sm" onclick="loadLog()">🔄 รีเฟรช</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>ผู้กระทำ</th><th>Action</th><th>Target</th><th>รายละเอียด</th><th>วันที่</th></tr></thead>
+            <tbody id="log-table"><tr><td colspan="6" class="empty">กำลังโหลด…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ─── STATE ─── */
+let API_URL = '', TOKEN = '', ME = null;
+let allUsers = [], allGroups = [];
+let userFilter = 'active', groupFilter = 'active';
+
+/* ─── STORAGE ─── */
+const S = {
+  save(){ localStorage.setItem('blm', JSON.stringify({url:API_URL, token:TOKEN})) },
+  load(){
+    try {
+      const d = JSON.parse(localStorage.getItem('blm') || '{}');
+      API_URL = d.url||''; TOKEN = d.token||'';
+    } catch(e){}
+  },
+  clear(){ localStorage.removeItem('blm'); API_URL=''; TOKEN=''; }
+};
+
+/* ─── API ─── (GET/POST only — InfinityFree compat) */
+async function api(action, method='GET', body=null) {
+  // แปลง PUT/DELETE → POST
+  if (method === 'PUT' || method === 'DELETE') method = 'POST';
+
+  let url  = API_URL + '?action=' + action;
+  const opts = { method, headers: { 'Content-Type':'application/json' } };
+
+  if (method === 'POST') {
+    // ส่ง token ใน body แทน header
+    opts.body = JSON.stringify({ ...(body || {}), token: TOKEN });
+  } else {
+    // GET — ส่ง token ใน query string
+    if (TOKEN) url += '&token=' + encodeURIComponent(TOKEN);
+  }
+
+  try {
+    const r = await fetch(url, opts);
+    const text = await r.text();
+    try { return JSON.parse(text); }
+    catch(e) { return { error: 'API ตอบกลับไม่ใช่ JSON: ' + text.substring(0,120) }; }
+  } catch(e) {
+    return { error: 'ติดต่อ API ไม่ได้: ' + e.message };
+  }
+}
+
+/* ─── LOGIN ─── */
+async function doLogin() {
+  const url  = document.getElementById('l-url').value.trim();
+  const user = document.getElementById('l-user').value.trim();
+  const pass = document.getElementById('l-pass').value;
+  const err  = document.getElementById('login-err');
+  const btn  = document.getElementById('login-btn');
+  if (!url || !user || !pass) { showErr(err, 'กรอกให้ครบทุกช่อง'); return; }
+  API_URL = url; err.style.display='none';
+  btn.textContent = '…กำลังเข้าสู่ระบบ'; btn.disabled = true;
+  const r = await (async () => {
+    const res = await fetch(url+'?action=login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({username:user, password:pass})
+    });
+    return res.json();
+  })().catch(e => ({ error: e.message }));
+  btn.textContent = 'เข้าสู่ระบบ'; btn.disabled = false;
+  if (r.error) { showErr(err, r.error); return; }
+  TOKEN = r.token; ME = r;
+  S.save();
+  afterLogin();
+}
+
+function showErr(el, msg) { el.textContent = msg; el.style.display='block'; }
+
+async function tryAutoLogin() {
+  S.load();
+  if (!API_URL || !TOKEN) return;
+  const timeout = new Promise(resolve => setTimeout(() => resolve({error:'timeout'}), 5000));
+  const r = await Promise.race([api('me'), timeout]);
+  if (r.error) { S.clear(); return; }
+  ME = r;
+  afterLogin();
+}
+
+function afterLogin() {
+  document.getElementById('login-overlay').classList.add('hide');
+  const chip = document.getElementById('user-chip');
+  chip.textContent = ME.username;
+  chip.className = 'user-chip' + (ME.is_super ? ' super-chip' : '');
+  if (ME.is_super) {
+    document.getElementById('nav-admins').style.display = '';
+    document.getElementById('nav-log').style.display = '';
+  }
+  loadAll();
+}
+
+function doLogout() {
+  api('logout', 'POST');
+  S.clear(); ME = null;
+  document.getElementById('login-overlay').classList.remove('hide');
+  document.getElementById('login-overlay').style.opacity = '1';
+  document.getElementById('nav-admins').style.display = 'none';
+  document.getElementById('nav-log').style.display = 'none';
+  document.getElementById('user-chip').textContent = '—';
+  document.getElementById('l-pass').value = '';
+}
+
+/* ─── LOAD ─── */
+async function loadAll() {
+  const [stats, list] = await Promise.all([api('stats'), api('admin_list')]);
+  if (!list.error) {
+    allUsers  = list.users  || [];
+    allGroups = list.groups || [];
+  }
+  if (!stats.error) {
+    document.getElementById('d-u').textContent = stats.totalUsers;
+    document.getElementById('d-g').textContent = stats.totalGroups;
+    renderRecent(stats.recent || []);
+  }
+  renderUsers();
+  renderGroups();
+  if (ME?.is_super) loadAdmins();
+}
+
+function renderRecent(rows) {
+  const tb = document.getElementById('d-recent');
+  tb.innerHTML = rows.length ? rows.map(r => `
+    <tr>
+      <td class="mono">${r.eid}</td>
+      <td>${esc(r.name)||'—'}</td>
+      <td><span class="badge ${r.type==='user'?'bd-user':'bd-group'}">${r.type==='user'?'USER':'GROUP'}</span></td>
+      <td>${esc(r.reason)}</td>
+      <td class="muted mono" style="font-size:11px">${r.banned_by||'—'}</td>
+      <td class="muted" style="font-size:11px">${r.ts}</td>
+    </tr>`).join('')
+  : '<tr><td colspan="6" class="empty">ยังไม่มีรายการ</td></tr>';
+}
+
+/* ─── USER FILTER ─── */
+function setUserFilter(f) {
+  userFilter = f;
+  ['active','unbanned','all'].forEach(k => {
+    document.getElementById('uf-'+k).style.background = k===f ? 'var(--blue-dim)' : '';
+    document.getElementById('uf-'+k).style.color = k===f ? 'var(--blue)' : '';
+  });
+  renderUsers();
+}
+
+function renderUsers() {
+  let rows = allUsers;
+  if (userFilter==='active')   rows = rows.filter(u => !u.unbanned);
+  if (userFilter==='unbanned') rows = rows.filter(u =>  u.unbanned);
+  const tb = document.getElementById('u-table');
+  tb.innerHTML = rows.length ? rows.map(u => `
+    <tr>
+      <td><a class="uid-link" href="https://www.roblox.com/users/${u.user_id}/profile" target="_blank">${u.user_id} ↗</a></td>
+      <td>${esc(u.name)||'—'}</td>
+      <td>${esc(u.reason)}</td>
+      <td>${u.unbanned
+        ? `<span class="badge bd-unban">ปลดแล้ว</span><br><span class="muted" style="font-size:10px">โดย ${esc(u.unbanned_by)||'?'}</span>`
+        : '<span class="badge bd-ban">แบนอยู่</span>'}</td>
+      <td class="muted mono" style="font-size:11px">${esc(u.banned_by)||'—'}</td>
+      <td class="muted" style="font-size:11px">${u.banned_at}</td>
+      <td style="display:flex;gap:4px;flex-wrap:nowrap">
+        ${!u.unbanned ? `<button class="btn-unban btn-sm" onclick="unbanUser('${u.id}')">✅ ปลดแบน</button>` : ''}
+        <button class="btn-danger btn-sm" onclick="delUser('${u.id}')">🗑️</button>
+      </td>
+    </tr>`).join('')
+  : `<tr><td colspan="7" class="empty">ไม่มีรายการ</td></tr>`;
+}
+
+/* ─── GROUP FILTER ─── */
+function setGroupFilter(f) {
+  groupFilter = f;
+  ['active','unbanned','all'].forEach(k => {
+    document.getElementById('gf-'+k).style.background = k===f ? 'var(--blue-dim)' : '';
+    document.getElementById('gf-'+k).style.color = k===f ? 'var(--blue)' : '';
+  });
+  renderGroups();
+}
+
+function renderGroups() {
+  let rows = allGroups;
+  if (groupFilter==='active')   rows = rows.filter(g => !g.unbanned);
+  if (groupFilter==='unbanned') rows = rows.filter(g =>  g.unbanned);
+  const tb = document.getElementById('g-table');
+  tb.innerHTML = rows.length ? rows.map(g => `
+    <tr>
+      <td><a class="uid-link" href="https://www.roblox.com/groups/${g.group_id}" target="_blank">${g.group_id} ↗</a></td>
+      <td>${esc(g.name)||'—'}</td>
+      <td>${esc(g.reason)}</td>
+      <td>${g.unbanned
+        ? `<span class="badge bd-unban">ปลดแล้ว</span><br><span class="muted" style="font-size:10px">โดย ${esc(g.unbanned_by)||'?'}</span>`
+        : '<span class="badge bd-ban">แบนอยู่</span>'}</td>
+      <td class="muted mono" style="font-size:11px">${esc(g.banned_by)||'—'}</td>
+      <td class="muted" style="font-size:11px">${g.banned_at}</td>
+      <td style="display:flex;gap:4px;flex-wrap:nowrap">
+        ${!g.unbanned ? `<button class="btn-unban btn-sm" onclick="unbanGroup('${g.id}')">✅ ปลดแบน</button>` : ''}
+        <button class="btn-danger btn-sm" onclick="delGroup('${g.id}')">🗑️</button>
+      </td>
+    </tr>`).join('')
+  : `<tr><td colspan="7" class="empty">ไม่มีรายการ</td></tr>`;
+}
+
+/* ─── ROBLOX USERNAME LOOKUP ─── */
+let _uidLookupTimer = null;
+let _lastLookupId = null;
+
+async function onUserIdInput() {
+  const uid = parseInt(document.getElementById('u-id').value);
+  const statusEl = document.getElementById('u-name-status');
+  const avatarWrap = document.getElementById('u-avatar-wrap');
+  const nameInput = document.getElementById('u-name');
+
+  clearTimeout(_uidLookupTimer);
+  avatarWrap.style.display = 'none';
+
+  if (!uid || uid < 1) {
+    statusEl.textContent = '';
+    return;
+  }
+
+  if (uid === _lastLookupId) return;
+
+  statusEl.textContent = '🔍 กำลังค้นหา…';
+  statusEl.style.color = 'var(--muted)';
+
+  _uidLookupTimer = setTimeout(async () => {
+    try {
+      // Use Roblox thumbnail + users API via proxy or direct
+      const [userRes, thumbRes] = await Promise.all([
+        fetch(`https://users.roblox.com/v1/users/${uid}`),
+        fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${uid}&size=48x48&format=Png&isCircular=false`)
+      ]);
+
+      if (!userRes.ok) {
+        statusEl.textContent = '❌ ไม่พบ UserId นี้';
+        statusEl.style.color = 'var(--red)';
+        _lastLookupId = null;
+        return;
+      }
+
+      const userData = await userRes.json();
+      const username = userData.name || userData.displayName;
+
+      _lastLookupId = uid;
+      nameInput.value = username;
+      statusEl.textContent = '';
+
+      // Show avatar card
+      const avatarImg = document.getElementById('u-avatar-img');
+      const avatarName = document.getElementById('u-avatar-name');
+      avatarName.textContent = username;
+      avatarWrap.style.display = 'flex';
+
+      if (thumbRes.ok) {
+        const thumbData = await thumbRes.json();
+        const imgUrl = thumbData?.data?.[0]?.imageUrl;
+        if (imgUrl) avatarImg.src = imgUrl;
+      }
+
+    } catch(e) {
+      statusEl.textContent = '⚠️ ดึงข้อมูลไม่ได้';
+      statusEl.style.color = 'var(--amber)';
+    }
+  }, 600);
+}
+
+/* ─── BAN / UNBAN USER ─── */
+async function addUser() {
+  const userId = parseInt(document.getElementById('u-id').value);
+  const name   = document.getElementById('u-name').value.trim();
+  const preset = document.getElementById('u-reason-preset').value.trim();
+  const custom = document.getElementById('u-reason-custom').value.trim();
+  const reason = preset || custom;
+  if (!userId) { toast('ใส่ UserId ก่อน', 'err'); return; }
+  if (!reason) { toast('เลือกเหตุผลหรือพิมพ์เหตุผลก่อน', 'err'); return; }
+  const r = await api('add_user','POST',{userId,name,reason});
+  if (r.error) { toast(r.error,'err'); return; }
+  document.getElementById('u-id').value = '';
+  document.getElementById('u-name').value = '';
+  document.getElementById('u-reason-preset').value = '';
+  document.getElementById('u-reason-custom').value = '';
+  document.getElementById('u-avatar-wrap').style.display = 'none';
+  document.getElementById('u-name-status').textContent = '';
+  _lastLookupId = null;
+  toast('แบนสำเร็จ 🚫'); loadAll();
+}
+
+async function unbanUser(id) {
+  if (!confirm('ต้องการปลดแบน user นี้?')) return;
+  const r = await api('unban_user','PUT',{id});
+  if (r.error) { toast(r.error,'err'); return; }
+  toast('ปลดแบนสำเร็จ ✅'); loadAll();
+}
+
+async function delUser(id) {
+  if (!confirm('ลบออกจากระบบถาวร?')) return;
+  const r = await api('remove_user','DELETE',{id});
+  if (r.error) { toast(r.error,'err'); return; }
+  toast('ลบออกแล้ว'); loadAll();
+}
+
+/* ─── BAN / UNBAN GROUP ─── */
+async function addGroup() {
+  const groupId = parseInt(document.getElementById('g-id').value);
+  const name    = document.getElementById('g-name').value.trim();
+  const reason  = document.getElementById('g-reason').value.trim() || 'ไม่ระบุ';
+  if (!groupId) { toast('ใส่ GroupId ก่อน', 'err'); return; }
+  const r = await api('add_group','POST',{groupId,name,reason});
+  if (r.error) { toast(r.error,'err'); return; }
+  document.getElementById('g-id').value = '';
+  document.getElementById('g-name').value = '';
+  document.getElementById('g-reason').value = '';
+  toast('แบนกลุ่มสำเร็จ 🚫'); loadAll();
+}
+
+async function unbanGroup(id) {
+  if (!confirm('ต้องการปลดแบนกลุ่มนี้?')) return;
+  const r = await api('unban_group','PUT',{id});
+  if (r.error) { toast(r.error,'err'); return; }
+  toast('ปลดแบนกลุ่มสำเร็จ ✅'); loadAll();
+}
+
+async function delGroup(id) {
+  if (!confirm('ลบกลุ่มออกจากระบบถาวร?')) return;
+  const r = await api('remove_group','DELETE',{id});
+  if (r.error) { toast(r.error,'err'); return; }
+  toast('ลบออกแล้ว'); loadAll();
+}
+
+/* ─── ADMINS ─── */
+async function loadAdmins() {
+  const list = await api('admin_users');
+  if (list.error) return;
+  const tb = document.getElementById('admin-table');
+  tb.innerHTML = list.map((a,i) => `
+    <tr>
+      <td class="muted mono">${i+1}</td>
+      <td style="font-weight:600">${esc(a.username)}</td>
+      <td><span class="badge ${a.is_super?'bd-super':'bd-admin'}">${a.is_super?'SUPERADMIN':'ADMIN'}</span></td>
+      <td class="muted mono" style="font-size:11px">${esc(a.created_by)||'—'}</td>
+      <td class="muted" style="font-size:11px">${a.created_at}</td>
+      <td>${!a.is_super ? `<button class="btn-danger btn-sm" onclick="removeAdmin('${esc(a.username)}')">ลบ</button>` : ''}</td>
+    </tr>`).join('');
+}
+
+async function addAdmin() {
+  const user = document.getElementById('aa-user').value.trim();
+  const pass = document.getElementById('aa-pass').value;
+  if (!user || !pass) { toast('กรอกให้ครบ','err'); return; }
+  const r = await api('add_admin','POST',{username:user, password:pass});
+  if (r.error) { toast(r.error,'err'); return; }
+  toast('เพิ่มแอดมินสำเร็จ ✅'); closeModal('modal-add-admin');
+  document.getElementById('aa-user').value=''; document.getElementById('aa-pass').value='';
+  loadAdmins();
+}
+
+async function removeAdmin(username) {
+  if (!confirm(`ลบแอดมิน "${username}" ออก?`)) return;
+  const r = await api('remove_admin','DELETE',{username});
+  if (r.error) { toast(r.error,'err'); return; }
+  toast('ลบแอดมินแล้ว'); loadAdmins();
+}
+
+/* ─── CHANGE PASSWORD ─── */
+async function changePassword() {
+  const old   = document.getElementById('pw-old').value;
+  const np    = document.getElementById('pw-new').value;
+  const conf  = document.getElementById('pw-conf').value;
+  if (np !== conf) { toast('รหัสผ่านใหม่ไม่ตรงกัน','err'); return; }
+  const r = await api('change_password','PUT',{old_password:old, new_password:np});
+  if (r.error) { toast(r.error,'err'); return; }
+  toast('เปลี่ยนรหัสผ่านสำเร็จ ✅'); closeModal('modal-pw');
+  document.getElementById('pw-old').value=''; document.getElementById('pw-new').value=''; document.getElementById('pw-conf').value='';
+}
+
+function checkPwStrength(val, fillId='pw-fill') {
+  const fill = document.getElementById(fillId);
+  let score = 0;
+  if (val.length >= 12) score++;
+  if (/[A-Z]/.test(val)) score++;
+  if (/[0-9]/.test(val)) score++;
+  if (/[^A-Za-z0-9]/.test(val)) score++;
+  const pct = (score/4)*100;
+  const colors = ['','#e8404a','#e8a44a','#4a8fe8','#3fb950'];
+  fill.style.width = pct+'%';
+  fill.style.background = colors[score]||'';
+}
+
+/* ─── LOG ─── */
+async function loadLog() {
+  const list = await api('log');
+  const tb = document.getElementById('log-table');
+  if (list.error) { tb.innerHTML=`<tr><td colspan="6" class="empty">${list.error}</td></tr>`; return; }
+  tb.innerHTML = list.map(l => `
+    <tr>
+      <td class="muted mono" style="font-size:11px">${l.id}</td>
+      <td style="font-weight:600">${esc(l.actor)}</td>
+      <td class="mono" style="font-size:11px">${esc(l.action)}</td>
+      <td class="mono" style="font-size:11px">${esc(l.target)||'—'}</td>
+      <td style="font-size:12px;color:var(--muted)">${esc(l.detail)||'—'}</td>
+      <td class="muted" style="font-size:11px">${l.ts}</td>
+    </tr>`).join('') || '<tr><td colspan="6" class="empty">ไม่มีประวัติ</td></tr>';
+}
+
+
+
+/* ─── SCRIPT GEN ─── */
+function genScript() {
+  const url = document.getElementById('sc-url').value.trim();
+  const key = document.getElementById('sc-key').value.trim();
+  if (!url || !key) { toast('กรอก URL และ Key','err'); return; }
+
+  document.getElementById('sc-out-users').textContent =
+`-- ================================================================
+--  KickUsers  |  วางใน ServerScriptService
+--  ดึงข้อมูลจากเว็บอัตโนมัติ — ไม่ต้องแก้ script เมื่อแบน/ปลดแบน
+-- ================================================================
+
+local Players     = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+
+local API_URL    = "${url}"
+local ROBLOX_KEY = "${key}"
+
+local blacklistedUsers = {}
+
+local function fetchUsers()
+    local ok, res = pcall(function()
+        return HttpService:GetAsync(API_URL .. "?action=list&key=" .. ROBLOX_KEY)
+    end)
+    if not ok then warn("[KickUsers] โหลดไม่ได้: " .. tostring(res)) return end
+    local data = HttpService:JSONDecode(res)
+    blacklistedUsers = data.users or {}
+    print("[KickUsers] โหลดสำเร็จ | users:", #blacklistedUsers)
+end
+
+local function checkUser(player)
+    for _, entry in ipairs(blacklistedUsers) do
+        if player.UserId == entry.userId then
+            player:Kick(
+                "\\nYou are banned from this experience." ..
+                "\\nReason: " .. (entry.reason or "Unauthorized") ..
+                "\\n\\nContact the owner if you think this is a mistake."
+            )
+            warn("[KickUsers] Kicked:", player.Name, player.UserId)
+            return
+        end
+    end
+end
+
+fetchUsers()
+
+Players.PlayerAdded:Connect(function(player)
+    task.wait(0.5)
+    checkUser(player)
+end)
+
+for _, player in ipairs(Players:GetPlayers()) do
+    task.spawn(checkUser, player)
+end`;
+
+  document.getElementById('sc-out-groups').textContent =
+`-- ================================================================
+--  KickGroups  |  วางใน ServerScriptService
+--  ดึงข้อมูลจากเว็บอัตโนมัติ — ไม่ต้องแก้ script เมื่อแบน/ปลดแบน
+-- ================================================================
+
+local Players      = game:GetService("Players")
+local HttpService  = game:GetService("HttpService")
+local GroupService = game:GetService("GroupService")
+
+local API_URL    = "${url}"
+local ROBLOX_KEY = "${key}"
+
+local blacklistedGroups = {}
+local groupNameCache    = {}
+
+local function fetchGroups()
+    local ok, res = pcall(function()
+        return HttpService:GetAsync(API_URL .. "?action=list&key=" .. ROBLOX_KEY)
+    end)
+    if not ok then warn("[KickGroups] โหลดไม่ได้: " .. tostring(res)) return end
+    local data = HttpService:JSONDecode(res)
+    blacklistedGroups = data.groups or {}
+    print("[KickGroups] โหลดสำเร็จ | groups:", #blacklistedGroups)
+end
+
+local function getGroupName(groupId)
+    if groupNameCache[groupId] then return groupNameCache[groupId] end
+    local ok, info = pcall(function() return GroupService:GetGroupInfoAsync(groupId) end)
+    local name = (ok and info and info.Name) or ("Group " .. groupId)
+    groupNameCache[groupId] = name
+    return name
+end
+
+local function checkGroup(player)
+    for _, entry in ipairs(blacklistedGroups) do
+        local ok, inGroup = pcall(function() return player:IsInGroup(entry.groupId) end)
+        if ok and inGroup then
+            local gname = getGroupName(entry.groupId)
+            player:Kick(
+                "\\nYou are banned (group member)." ..
+                "\\nGroup: " .. gname ..
+                "\\nReason: " .. (entry.reason or "Unauthorized group") ..
+                "\\n\\nContact the owner if you think this is a mistake."
+            )
+            warn("[KickGroups] Kicked group member:", player.Name, "—", gname)
+            return
+        end
+    end
+end
+
+fetchGroups()
+
+Players.PlayerAdded:Connect(function(player)
+    task.wait(0.5)
+    checkGroup(player)
+end)
+
+for _, player in ipairs(Players:GetPlayers()) do
+    task.spawn(checkGroup, player)
+end`;
+
+  toast('สร้าง Script สำเร็จ ✅');
+}
+
+/* ─── SYNC BAN SCRIPT GEN ─── */
+function genSyncScript() {
+  const universeId = document.getElementById('sc-universe').value.trim();
+  const apiKey     = document.getElementById('sc-opencloud').value.trim();
+  const url        = document.getElementById('sc-url').value.trim();
+  const key        = document.getElementById('sc-key').value.trim();
+  if (!universeId || !apiKey) { toast('กรอก Universe ID และ Open Cloud API Key','err'); return; }
+  if (!url || !key)           { toast('กรอก URL และ ROBLOX_KEY ด้านบนด้วย','err'); return; }
+
+  document.getElementById('sc-out-sync').textContent =
+`-- ================================================================
+--  SyncBan  |  วางใน ServerScriptService
+--  Sync blacklist จากเว็บ → Roblox Experience Ban API
+--  ผู้เล่นที่ถูกแบนจะไม่สามารถ join ได้แม้ไม่อยู่ใน server
+-- ================================================================
+
+local HttpService = game:GetService("HttpService")
+local Players     = game:GetService("Players")
+local RunService  = game:GetService("RunService")
+
+-- ⚠️  เก็บไว้ใน Server Script เท่านั้น — ห้าม LocalScript
+local API_URL      = "${url}"
+local ROBLOX_KEY   = "${key}"
+local UNIVERSE_ID  = "${universeId}"
+local OPENCLOUD_KEY = "${apiKey}"
+
+local SYNC_INTERVAL = 300   -- sync ทุก 5 นาที (วินาที)
+local lastSyncTime  = 0
+local syncedBans    = {}    -- cache userId ที่ sync แล้ว
+
+-- ── ดึง blacklist จากเว็บ ─────────────────────────────
+local function fetchBlacklist()
+    local ok, res = pcall(function()
+        return HttpService:GetAsync(
+            API_URL .. "?action=list&key=" .. ROBLOX_KEY,
+            true
+        )
+    end)
+    if not ok then
+        warn("[SyncBan] ดึง blacklist ไม่ได้:", tostring(res))
+        return nil
+    end
+    local ok2, data = pcall(HttpService.JSONDecode, HttpService, res)
+    if not ok2 then warn("[SyncBan] JSON decode ผิดพลาด") return nil end
+    return data
+end
+
+-- ── เรียก Roblox Experience Ban API ──────────────────
+local function setBan(userId, shouldBan, reason)
+    reason = reason or "Blacklisted"
+    local endpoint = string.format(
+        "https://apis.roblox.com/cloud/v2/universes/%s/user-restrictions/%s",
+        UNIVERSE_ID, tostring(userId)
+    )
+    local body = HttpService:JSONEncode({
+        gameJoinRestriction = {
+            active  = shouldBan,
+            duration = nil,           -- nil = permanent
+            privateReason = reason,
+            displayReason = "You are banned from this experience.\\nReason: " .. reason,
+            excludeAltAccounts = false,
+        }
+    })
+    local ok, res = pcall(function()
+        return HttpService:RequestAsync({
+            Url     = endpoint,
+            Method  = "PATCH",
+            Headers = {
+                ["x-api-key"]    = OPENCLOUD_KEY,
+                ["Content-Type"] = "application/json",
+            },
+            Body = body,
+        })
+    end)
+    if not ok then
+        warn("[SyncBan] API error for", userId, ":", tostring(res))
+        return false
+    end
+    if res.StatusCode ~= 200 then
+        warn("[SyncBan] HTTP", res.StatusCode, "for userId", userId, res.Body)
+        return false
+    end
+    return true
+end
+
+-- ── sync blacklist ทั้งหมด ────────────────────────────
+local function syncAll()
+    local data = fetchBlacklist()
+    if not data then return end
+
+    local currentBanned = {}
+    for _, u in ipairs(data.users or {}) do
+        local uid = tostring(u.userId)
+        currentBanned[uid] = u.reason or "Blacklisted"
+    end
+
+    -- Ban ผู้ที่อยู่ใน list แต่ยังไม่ได้ sync
+    local newCount = 0
+    for uid, reason in pairs(currentBanned) do
+        if not syncedBans[uid] then
+            if setBan(tonumber(uid), true, reason) then
+                syncedBans[uid] = true
+                newCount += 1
+            end
+            task.wait(0.5)  -- rate limit
+        end
+    end
+
+    -- Unban ผู้ที่ถูก sync ไปแล้วแต่ถูกปลดแบนในเว็บ
+    local unbanCount = 0
+    for uid in pairs(syncedBans) do
+        if not currentBanned[uid] then
+            if setBan(tonumber(uid), false, "") then
+                syncedBans[uid] = nil
+                unbanCount += 1
+            end
+            task.wait(0.5)
+        end
+    end
+
+    if newCount > 0 or unbanCount > 0 then
+        print(string.format("[SyncBan] ✅ Sync สำเร็จ — ban ใหม่: %d, ปลดแบน: %d", newCount, unbanCount))
+    else
+        print("[SyncBan] ✅ ไม่มีการเปลี่ยนแปลง")
+    end
+end
+
+-- ── Kick ผู้เล่นที่อยู่ใน server ทันที (รองรับ group ban ด้วย) ──
+local function kickExisting()
+    local data = fetchBlacklist()
+    if not data then return end
+    local bannedIds = {}
+    for _, u in ipairs(data.users or {}) do bannedIds[u.userId] = u.reason end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if bannedIds[player.UserId] then
+            player:Kick(
+                "\\nYou are banned from this experience." ..
+                "\\nReason: " .. (bannedIds[player.UserId] or "Unauthorized") ..
+                "\\n\\nContact the owner if you think this is a mistake."
+            )
+        end
+    end
+end
+
+-- ── เริ่มทำงาน ────────────────────────────────────────
+print("[SyncBan] 🔄 เริ่ม sync กับ Roblox Experience Ban API...")
+kickExisting()
+syncAll()
+
+-- loop sync ทุก SYNC_INTERVAL วินาที
+task.spawn(function()
+    while true do
+        task.wait(SYNC_INTERVAL)
+        syncAll()
+    end
+end)
+
+-- ตรวจผู้เล่นใหม่แบบ realtime (กรณีแบนหลัง join)
+Players.PlayerAdded:Connect(function(player)
+    task.wait(1)
+    local data = fetchBlacklist()
+    if not data then return end
+    for _, u in ipairs(data.users or {}) do
+        if player.UserId == u.userId then
+            player:Kick(
+                "\\nYou are banned from this experience." ..
+                "\\nReason: " .. (u.reason or "Unauthorized") ..
+                "\\n\\nContact the owner if you think this is a mistake."
+            )
+            return
+        end
+    end
+end)
+
+print("[SyncBan] ✅ พร้อมทำงาน | Universe:", UNIVERSE_ID, "| Sync ทุก", SYNC_INTERVAL, "วิ")`;
+
+  // PHP webhook snippet
+  document.getElementById('sc-out-webhook').textContent =
+`<?php
+// ── เพิ่มฟังก์ชันนี้ใน api.php ──────────────────────────────────
+// เรียกใช้หลังจาก ban/unban สำเร็จเพื่อ sync ไปยัง Roblox ทันที
+
+define('OPENCLOUD_KEY', 'ใส่ Open Cloud API Key ของคุณ');
+define('UNIVERSE_ID',   'ใส่ Universe ID ของคุณ');
+
+function syncToRoblox(int $userId, bool $ban, string $reason = ''): bool {
+    $url  = sprintf(
+        'https://apis.roblox.com/cloud/v2/universes/%s/user-restrictions/%d',
+        UNIVERSE_ID, $userId
+    );
+    $body = json_encode([
+        'gameJoinRestriction' => [
+            'active'              => $ban,
+            'privateReason'       => $reason ?: 'Blacklisted',
+            'displayReason'       => 'You are banned from this experience.',
+            'excludeAltAccounts'  => false,
+        ]
+    ]);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST  => 'PATCH',
+        CURLOPT_POSTFIELDS     => $body,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => [
+            'x-api-key: ' . OPENCLOUD_KEY,
+            'Content-Type: application/json',
+        ],
+    ]);
+    $res  = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return $code === 200;
+}
+
+// ── ตัวอย่างการเรียกใช้ใน action add_user ────────────────────────
+// หลังจาก INSERT / UPDATE สำเร็จแล้ว ให้เพิ่มบรรทัดนี้:
+//   syncToRoblox($userId, true, $reason);
+//
+// และใน action unban_user หลังจาก UPDATE:
+//   $row = getDB()->prepare("SELECT user_id FROM banned_users WHERE id=?");
+//   $row->execute([$id]);
+//   $uid = (int)($row->fetchColumn() ?: 0);
+//   if ($uid) syncToRoblox($uid, false);
+?>`;
+
+  document.getElementById('sc-sync-card').style.display    = '';
+  document.getElementById('sc-webhook-card').style.display = '';
+  toast('สร้าง SyncBan Script สำเร็จ ✅');
+}
+
+function copyScript(id) {
+  const t = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(t).then(() => toast('Copy สำเร็จ! 📋','info'));
+}
+
+/* ─── MODAL ─── */
+function openModal(id)  { document.getElementById(id).classList.add('show') }
+function closeModal(id) { document.getElementById(id).classList.remove('show') }
+document.querySelectorAll('.modal-bg').forEach(m => {
+  m.addEventListener('click', e => { if(e.target===m) m.classList.remove('show') });
+});
+
+/* ─── NAV ─── */
+function go(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.nav').forEach(n => n.classList.remove('on'));
+  document.getElementById('page-'+id).classList.add('on');
+  el.classList.add('on');
+  if (id==='admins') loadAdmins();
+  if (id==='log')    loadLog();
+}
+
+/* ─── TOAST ─── */
+let _toastTimer;
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast show ${type}`;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.className='toast', 2500);
+}
+
+/* ─── UTIL ─── */
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ─── INIT ─── */
+setUserFilter('active');
+setGroupFilter('active');
+tryAutoLogin();
+</script>
+</body>
+</html>
